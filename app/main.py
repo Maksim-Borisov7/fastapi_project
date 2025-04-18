@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import logging
-from app.database.methods import DBmethods
+from app.database.methods import delete_table, create_table
 from app.routes.auth import router as router_auth
 from app.routes.admin import router as router_admin
 from app.routes.posts import router as router_posts
@@ -13,8 +13,8 @@ logger.setLevel(logging.INFO)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.info("Запуск сервера")
-    await DBmethods.delete_table()
-    await DBmethods.create_table()
+    await delete_table()
+    await create_table()
     logging.info("База готова к работе")
     yield
     logging.info("Выключение")

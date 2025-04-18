@@ -1,52 +1,69 @@
 from datetime import datetime, timezone, timedelta
-from fastapi import HTTPException
+from app.config import settings
 from jose import jwt
-from passlib.context import CryptContext
-from starlette import status
-from starlette.requests import Request
-from app.core.config import get_auth_data
-from app.users.crud import UsersDAO
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
 
 
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=10)
-    to_encode.update({"exp": expire})
-    auth_data = get_auth_data()
-    encode_jwt = jwt.encode(to_encode, auth_data["secret_key"], algorithm=auth_data['algorithm'])
-    return encode_jwt
+def encode_jwt(
+        payload: dict,
+        private_key=settings.auth_jwt.private_key_path.read_text(),
+        algorithm=settings.auth_jwt.algorithm,
+        expire_minutes: int = settings.auth_jwt.access_token_expire_minutes,
+        expire_timedelta: timedelta | None = None,
+):
+    to_encode = payload.copy()
+    now = datetime.now(timezone.utc)
+    if expire_timedelta:
+        expire = now + expire_timedelta
+    else:
+        expire = now + timedelta(minutes=expire_minutes)
+    to_encode.update(
+        exp=expire,
+        iat=now,
+    )
+    encoded = jwt.encode(
+        to_encode,
+        private_key,
+        algorithm=algorithm
+    )
+    return encoded
 
 
-def get_token(request: Request):
-    token = request.cookies.get('users_access_token')
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Token not found')
-    return token
+def decode_jwt(
+        token: str | bytes,
+        public_key=settings.auth_jwt.public_key_path.read_text(),
+        algorithm=settings.auth_jwt.algorithm,
+):
+    decoded = jwt.decode(
+        token,
+        public_key,
+        algorithms=[algorithm]
+    )
+    return decoded
 
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+def hash_password(
+        password: str,
+) -> bytes:
+    salt = bcrypt.gensalt()
+    pwd_bytes: bytes = password.encode()
+    return bcrypt.hashpw(pwd_bytes, salt)
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+def validate_password(
+        password: str,
+        hashed_password: bytes,
+) -> bool:
+    return bcrypt.checkpw(
+        password=password.encode(),
+        hashed_password=hashed_password,
+    )
 
 
-async def authenticate_user(data_user):
-    if data_user.username == data_user.username and data_user.password == "111":
-        return await UsersDAO.change_credentials(data_user.username, is_user=False, is_super_admin=True)
-    if data_user.username == data_user.username and data_user.password == "222":
-        return await UsersDAO.change_credentials(data_user.username, is_user=True, is_super_admin=False)
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail='Неверный username или password')
 
 
-    # user = await UsersDAO.find_one_or_none(username=data_user.username)
-    # if not user or verify_password(plain_password=data_user.password, hashed_password=user.password) is False:
-    #     return None
-    # return user
+
+
 
 
 

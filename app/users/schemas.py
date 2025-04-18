@@ -17,3 +17,8 @@ class UsersUpdateSchema(UsersRegistrationSchema):
     id: int
     is_super_admin: Optional[bool] = False
     is_user: Optional[bool] = False
+
+
+class TokenInfo(BaseModel):
+    access_token: str
+    token_type: str

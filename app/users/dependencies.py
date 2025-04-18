@@ -1,46 +1,70 @@
-from datetime import datetime, timezone
-from fastapi import Depends, HTTPException
-from jose import jwt, JWTError
+from fastapi import Depends, HTTPException, Form
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
-from app.core.config import get_auth_data
-from app.users.auth import get_token
+from jwt.exceptions import InvalidTokenError
+
+from app.config import IS_SUPER_ADMIN_PASSWORD
+from app.database.db_helper import db_helper
+from app.users.auth import decode_jwt, validate_password
 from app.users.crud import UsersDAO
 from app.users.schemas import UsersAuthorizationSchema
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/authorization/")
 
-async def get_current_user(token: str = Depends(get_token)):
+
+async def get_current_token_payload(token: str = Depends(oauth2_scheme)):
     try:
-        auth_data = get_auth_data()
-        payload = jwt.decode(token, auth_data['secret_key'], algorithms=[auth_data['algorithm']])
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Токен не валиден")
-
-    expire = payload.get('exp')
-    expire_time = datetime.fromtimestamp(int(expire), tz=timezone.utc)
-    if (not expire) or (expire_time < datetime.now(timezone.utc)):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Токен истек')
-
-    user_id = payload.get('sub')
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Не найден ID пользователя')
-
-    user = await UsersDAO.find_one_or_none_by_id(int(user_id))
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='User not found')
-    return user
+        payload = decode_jwt(token=token)
+    except InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Не валидный токен"
+        )
+    return payload
 
 
-async def get_current_is_super_admin_user(current_user: UsersAuthorizationSchema = Depends(get_current_user)):
+async def get_current_auth_users(session: AsyncSession = Depends(db_helper.get_session),
+                                 payload: dict = Depends(get_current_token_payload),
+                                 ):
+    user_id = payload.get("sub")
+    user = await UsersDAO.find_user_by_id(user_id, session)
+    if user:
+        return user
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+
+
+async def get_current_is_super_admin_user(current_user: UsersAuthorizationSchema = Depends(get_current_auth_users)):
     if current_user.is_super_admin:
         return current_user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Недостаточно прав!')
 
 
-async def get_current_is_user(current_user: UsersAuthorizationSchema = Depends(get_current_user)):
-    if current_user.is_user or current_user.is_super_admin:
+async def get_current_is_user(current_user: UsersAuthorizationSchema = Depends(get_current_auth_users)):
+    if current_user.is_user:
         return current_user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Недостаточно прав!')
 
 
-
-
+async def validate_auth_user(
+        username: str = Form(),
+        password: str = Form(),
+        session: AsyncSession = Depends(db_helper.get_session),
+):
+    unauth_exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="invalid username or password",
+    )
+    db_user = await UsersDAO.find_user(session, username=username)
+    if not db_user:
+        raise unauth_exc
+    if password == IS_SUPER_ADMIN_PASSWORD:
+        await UsersDAO.change_credentials(session, db_user, is_user=False, is_super_admin=True)
+        return db_user
+    if validate_password(
+        password=password,
+        hashed_password=db_user.password,
+    ):
+        return db_user
+    else:
+        raise unauth_exc

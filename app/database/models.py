@@ -9,7 +9,7 @@ class Base(DeclarativeBase):
 class PostsModels(Base):
     __tablename__ = "posts"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    post_id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str]
     content: Mapped[str]
     comments: Mapped[str | None] = None
@@ -22,9 +22,9 @@ class PostsModels(Base):
 class UsersModel(Base):
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(unique=True)
-    password: Mapped[str]
+    password: Mapped[bytes]
     email: Mapped[str] = mapped_column(unique=True)
     about_me: Mapped[str | None]
 
