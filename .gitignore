@@ -1,5 +1,5 @@
 __pycache__/
 .idea/
-.env/
+.env
 certs/
-__pycache__
+
