@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 from app.database.db_helper import db_helper
-from app.database.models import UsersModel
 from app.posts.crud import PostsDAO
 from app.users.dependencies import get_current_is_user
 from app.users.schemas import UsersAuthorizationSchema

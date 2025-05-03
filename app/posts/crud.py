@@ -1,6 +1,6 @@
 import logging
 from sqlalchemy import select, delete, update
-from app.database.models import PostsModels, UsersModel
+from app.database.models import PostsModels
 
 
 class PostsDAO:
