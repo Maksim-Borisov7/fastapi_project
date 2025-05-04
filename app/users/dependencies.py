@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 from jwt.exceptions import InvalidTokenError
 
-from app.config import IS_SUPER_ADMIN_PASSWORD
+from app.config import settings
 from app.database.db_helper import db_helper
 from app.users.auth import decode_jwt, validate_password
 from app.users.crud import UsersDAO
@@ -58,7 +58,7 @@ async def validate_auth_user(
     db_user = await UsersDAO.find_user(session, username=username)
     if not db_user:
         raise unauth_exc
-    if password == IS_SUPER_ADMIN_PASSWORD:
+    if password == settings.IS_SUPER_ADMIN_PASSWORD:
         await UsersDAO.change_credentials(session, db_user, is_user=False, is_super_admin=True)
         return db_user
     if validate_password(
